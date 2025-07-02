@@ -47,7 +47,7 @@
      (fn [{path :path}]
        (if (some (partial = path) (git-ls-files))
          (try {:content (slurp path)}
-              (catch Exception e {:error (str "Error reading file: " path)}))
+              (catch Exception _ {:error (str "Error reading file: " path)}))
          {:error (str "File not in git path: " path)})))])
 
 (def roles {:user "user", :model "model"})
