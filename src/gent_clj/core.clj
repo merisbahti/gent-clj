@@ -108,7 +108,6 @@
            (handle-gemini-response gemini-response) should-end
            (should-end? gemini-response) new-contents
            (concat contents [gemini-response] handled-gemini-response)]
-          (println {:resp contents})
           (if (and (> iters-left 0) (not should-end))
             (recur (dec iters-left) new-contents)
             new-contents))))
