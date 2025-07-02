@@ -29,15 +29,15 @@
                           "Lists files in a git repository."
                           nil
                           (fn [& _] (git-ls-files)))
-   (->FunctionDeclaration
-     "open-file"
-     "Show contents of a file in the git repository."
-     {:type "object",
-      :properties {:path {:type "string",
-                          :description
-                            "The path to the file in the repository."}},
-      :required ["path"]}
-     (fn [& _] (throw (Exception. "Not implemented: open-git-file"))))])
+   ;; (->FunctionDeclaration
+   ;;   "open-file" "Show contents of a file in the git repository."
+   ;;   {:type "object",
+   ;;    :properties {:path {:type "string",
+   ;;                        :description
+   ;;                          "The path to the file in the repository."}},
+   ;;    :required ["path"]}
+   ;;   (fn [& _] (throw (Exception. "Not implemented: open-git-file"))))
+  ])
 
 (def roles {:user "user", :model "model"})
 
@@ -47,7 +47,7 @@
   [contents]
   (->
     (client/post
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent"
       {:headers {"x-goog-api-key" (System/getenv "GEMINI_API_KEY"),
                  "Content-Type" "application/json"},
        :throw-exceptions false,
@@ -68,9 +68,8 @@
 
 (defn handle-gemini-response
   [response]
-  (map (fn [part]
-         (let* [{{function-name :name, function-args :args} :functionCall} part
-                found-fn
+  (map (fn [{{function-name :name, function-args :args} :functionCall}]
+         (let* [found-fn
                 (:definition (first (filter #(= function-name (:name %))
                                       function-declarations)))]
                {:role "user",
@@ -109,10 +108,12 @@
            (handle-gemini-response gemini-response) should-end
            (should-end? gemini-response) new-contents
            (concat contents [gemini-response] handled-gemini-response)]
+          (println {:resp contents})
           (if (and (> iters-left 0) (not should-end))
             (recur (dec iters-left) new-contents)
             new-contents))))
-(run-prompt "list the files")
+(comment
+  (run-prompt "list the files"))
 
 (comment
   (-> (client/get (str api-base "/models")
@@ -122,7 +123,8 @@
                    :throw-exceptions false})
       :body
       json/read-str
-      (get "data")))
+      walk/keywordize-keys
+      :data))
       ;; #(map (fn [x] (get-in x ["capabilities" "family"]) %1))
 (comment
   (json/read-str
