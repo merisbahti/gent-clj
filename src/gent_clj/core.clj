@@ -2,12 +2,14 @@
   (:require [clj-http.client :as client]
             [clojure.data.json :as json]
             [clojure.edn :as edn]
+            [clojure.walk :as walk]
             [clojure.java.shell :as sh]
             [clojure.test :refer [deftest is testing]]
             [malli.core :as m]))
 (json/write-str {:model "openai/gpt-4.1",
                  :messages [{:role "user",
                              :content "What is the capital of France?"}]})
+
 
 (def api-base (System/getenv "OPENAI_API_BASE"))
 (def api-key (System/getenv "OPENAI_API_KEY"))
@@ -57,18 +59,18 @@
     :body
     (json/read-str)
     (#(m/assert ApiResponse %))
-    ((fn [x] (println "api resp" x) x))
-    (get-in ["candidates" 0 "content"])))
+    (get-in ["candidates" 0 "content"])
+    (walk/keywordize-keys)))
 
-
-
+(let [{{name :name, args :args} :functionCall}
+        {:functionCall {:name "myname", :args {:arg "myarg"}}}]
+  [name args])
 
 (defn handle-gemini-response
   [response]
   (map (fn [part]
-         (let* [function-call (get part "functionCall") function-args
-                (get function-call "args") function-name
-                (get function-call "name") found-fn
+         (let* [{{function-name :name, function-args :args} :functionCall} part
+                found-fn
                 (:definition (first (filter #(= function-name (:name %))
                                       function-declarations)))]
                {:role "user",
@@ -79,25 +81,25 @@
                                                  {:error
                                                     (str "Function not found: "
                                                          function-name)})}}}]}))
-    (get response "parts")))
+    (get response :parts)))
 
 
 
 (defn should-end?
   [parts]
   (-> parts
-      (get "parts")
-      (#(some (fn [part] (= "end" (get-in part ["functionCall" "name"]))) %))))
+      (get :parts)
+      (#(some (fn [part] (= "end" (get-in part [:functionCall :name]))) %))))
 (deftest should-end-test
   (testing "should end"
     (is (= true
-           (should-end? {"parts" [{"functionCall" {"name" "end", "args" {}}}],
-                         "role" "model"}))))
+           (should-end? {:parts [{:functionCall {:name "end", :args {}}}],
+                         :role "model"}))))
   (testing "keep going?"
     (is (not (= true
-                (should-end? {"parts" [{"functionCall" {"name" "stuff",
-                                                        "args" {}}}],
-                              "role" "model"}))))))
+                (should-end? {:parts [{:functionCall {:name "stuff",
+                                                      :args {}}}],
+                              :role "model"}))))))
 
 (defn run-prompt
   [prompt]
