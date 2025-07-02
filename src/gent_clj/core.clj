@@ -1,10 +1,10 @@
 (ns gent-clj.core
   (:require [clj-http.client :as client]
             [clojure.data.json :as json]
-            [clojure.edn :as edn]
-            [clojure.walk :as walk]
             [clojure.java.shell :as sh]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [clojure.walk :as walk]
             [malli.core :as m]))
 (json/write-str {:model "openai/gpt-4.1",
                  :messages [{:role "user",
@@ -13,7 +13,14 @@
 
 (def api-base (System/getenv "OPENAI_API_BASE"))
 (def api-key (System/getenv "OPENAI_API_KEY"))
-(defn git-ls-files [] (sh/sh "git" "ls-files"))
+(defn git-ls-files
+  []
+  (-> (sh/sh "git" "ls-files")
+      :out
+      (str/split #"\n")))
+(comment
+  (git-ls-files))
+
 
 (defrecord FunctionDeclaration [name description parameters definition])
 (deftype EndOfConversation [])
@@ -29,15 +36,19 @@
                           "Lists files in a git repository."
                           nil
                           (fn [& _] (git-ls-files)))
-   ;; (->FunctionDeclaration
-   ;;   "open-file" "Show contents of a file in the git repository."
-   ;;   {:type "object",
-   ;;    :properties {:path {:type "string",
-   ;;                        :description
-   ;;                          "The path to the file in the repository."}},
-   ;;    :required ["path"]}
-   ;;   (fn [& _] (throw (Exception. "Not implemented: open-git-file"))))
-  ])
+   (->FunctionDeclaration
+     "open-file"
+     "Show contents of a file in the git repository."
+     {:type "object",
+      :properties {:path {:type "string",
+                          :description
+                            "The path to the file in the repository."}},
+      :required ["path"]}
+     (fn [{path :path}]
+       (if (some (partial = path) (git-ls-files))
+         (try {:content (slurp path)}
+              (catch Exception e {:error (str "Error reading file: " path)}))
+         {:error (str "File not in git path: " path)})))])
 
 (def roles {:user "user", :model "model"})
 
