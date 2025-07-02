@@ -2,3 +2,5 @@ target
 .nrepl-port
 .clj-kondo
 .lsp
+.lein-failures
+.lein-repl-history
