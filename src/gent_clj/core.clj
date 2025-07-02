@@ -1,40 +1,46 @@
 (ns gent-clj.core
   (:require [clj-http.client :as client]
             [clojure.data.json :as json]
-            [clojure.test :refer [deftest is testing]]))
+            [clojure.edn :as edn]
+            [clojure.java.shell :as sh]
+            [clojure.test :refer [deftest is testing]]
+            [malli.core :as m]))
 (json/write-str {:model "openai/gpt-4.1",
                  :messages [{:role "user",
                              :content "What is the capital of France?"}]})
 
-;; curl -L \
-  ;; -X POST \
-  ;; -H "Accept: application/vnd.github+json" \
-  ;; -H "Authorization: Bearer <YOUR-TOKEN>" \
-  ;; -H "X-GitHub-Api-Version: 2022-11-28" \
-  ;; -H "Content-Type: application/json" \
-  ;; https://models.github.ai/orgs/ORG/inference/chat/completions \
-  ;; -d '{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"What
-  ;; is
-  ;; the capital of France?"}]}'
-
 (def api-base (System/getenv "OPENAI_API_BASE"))
 (def api-key (System/getenv "OPENAI_API_KEY"))
+(defn git-ls-files [] (sh/sh "git" "ls-files"))
+
+(defrecord FunctionDeclaration [name description parameters definition])
+(deftype EndOfConversation [])
+
+
 
 (def function-declarations
-  [{:name "git-ls-files",
-    :description "Lists files in a git repository.",
-    :definition (fn [] (throw (Exception. "Not implemented: git-ls-files")))}
-   {:name "open-git-file",
-    :description "Lists files in a git repository.",
-    :parameters {:type "object",
-                 :properties {:path
-                                {:type "string",
-                                 :description
-                                   "The path to the file in the repository."}},
-                 :required ["path"]},
-    :definition (fn [] (throw (Exception. "Not implemented: open-git-file")))}])
+  [(->FunctionDeclaration "end"
+                          "Call when there's nothing else to do"
+                          nil
+                          (fn [& _] EndOfConversation))
+   (->FunctionDeclaration "git-ls-files"
+                          "Lists files in a git repository."
+                          nil
+                          (fn [& _] (git-ls-files)))
+   (->FunctionDeclaration
+     "open-file"
+     "Show contents of a file in the git repository."
+     {:type "object",
+      :properties {:path {:type "string",
+                          :description
+                            "The path to the file in the repository."}},
+      :required ["path"]}
+     (fn [& _] (throw (Exception. "Not implemented: open-git-file"))))])
 
 (def roles {:user "user", :model "model"})
+
+(def ApiResponse [:map ["candidates" [:sequential [:map ["content" [:map]]]]]])
+
 (defn call-api
   [contents]
   (->
@@ -43,53 +49,67 @@
       {:headers {"x-goog-api-key" (System/getenv "GEMINI_API_KEY"),
                  "Content-Type" "application/json"},
        :throw-exceptions false,
-       :body (json/write-str {:contents contents,
-                              :tools [{:functionDeclarations
-                                         (map #(dissoc % :definition)
-                                           function-declarations)}]})})
+       :body (json/write-str
+               {:contents contents,
+                :tools [{:functionDeclarations (map #(dissoc % :definition)
+                                                 function-declarations)}],
+                :toolConfig {:functionCallingConfig {:mode "any"}}})})
     :body
     (json/read-str)
+    (#(m/assert ApiResponse %))
+    ((fn [x] (println "api resp" x) x))
     (get-in ["candidates" 0 "content"])))
 
-(comment
-  (call-api [{:role "user",
-              :parts [{:text "list the files in the current git repo"}]}]))
 
-;; {"parts" [{"functionCall" {"name" "git-ls-files", "args" {}}}], "role"
-;; "model"}
 
-(:definition (first (filter #(= (get-in {"functionCall" {"name" "git-ls-files"}}
-                                        ["functionCall" "name"])
-                                (:name %))
-                      function-declarations)))
 
 (defn handle-gemini-response
   [response]
   (map (fn [part]
-         {:role "user",
-          :functionResponse
-            (let* [function-call (get part "functionCall") function-args
-                   (get function-call "args") function-name
-                   (get function-call "name") found-fn
-                   (:definition (first (filter #(= function-name (:name %))
-                                         function-declarations))) fn-result
-                   (if (found-fn)
-                     (found-fn function-args)
-                     {:error (str "Function not found: " function-name)})]
-                  fn-result)})
+         (let* [function-call (get part "functionCall") function-args
+                (get function-call "args") function-name
+                (get function-call "name") found-fn
+                (:definition (first (filter #(= function-name (:name %))
+                                      function-declarations)))]
+               {:role "user",
+                :parts [{:functionResponse
+                           {:name (or function-name "not-found"),
+                            :response {:result (if found-fn
+                                                 (found-fn function-args)
+                                                 {:error
+                                                    (str "Function not found: "
+                                                         function-name)})}}}]}))
     (get response "parts")))
 
-(handle-gemini-response {"parts" [{"functionCall" {"name" "git-ls-files"}}]})
 
+
+(defn should-end?
+  [parts]
+  (-> parts
+      (get "parts")
+      (#(some (fn [part] (= "end" (get-in part ["functionCall" "name"]))) %))))
+(deftest should-end-test
+  (testing "should end"
+    (is (= true
+           (should-end? {"parts" [{"functionCall" {"name" "end", "args" {}}}],
+                         "role" "model"}))))
+  (testing "keep going?"
+    (is (not (= true
+                (should-end? {"parts" [{"functionCall" {"name" "stuff",
+                                                        "args" {}}}],
+                              "role" "model"}))))))
 
 (defn run-prompt
   [prompt]
   (loop [iters-left 5
          contents [{:role "user", :parts [{:text prompt}]}]]
-    (let* [gemini-response (call-api contents)]
-          (if (> iters-left 0)
-            (recur (dec iters-left) (conj contents gemini-response))
-            contents))))
+    (let* [gemini-response (call-api contents) handled-gemini-response
+           (handle-gemini-response gemini-response) should-end
+           (should-end? gemini-response) new-contents
+           (concat contents [gemini-response] handled-gemini-response)]
+          (if (and (> iters-left 0) (not should-end))
+            (recur (dec iters-left) new-contents)
+            new-contents))))
 (run-prompt "list the files")
 
 (comment
@@ -100,9 +120,8 @@
                    :throw-exceptions false})
       :body
       json/read-str
-      (get "data")
+      (get "data")))
       ;; #(map (fn [x] (get-in x ["capabilities" "family"]) %1))
-  ))
 (comment
   (json/read-str
     (:body (client/post
