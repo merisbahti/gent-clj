@@ -2,6 +2,7 @@
   (:require [clj-http.client :as client]
             [clojure.data.json :as json]
             [clojure.java.shell :as sh]
+            [clojure.pprint :as pprint]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [clojure.walk :as walk]
@@ -24,10 +25,16 @@
 (deftype EndOfConversation [])
 
 (def function-declarations
-  [(->FunctionDeclaration "end"
-                          "Call when there's nothing else to do"
-                          nil
-                          (fn [& _] EndOfConversation))
+  [(->FunctionDeclaration
+     "end"
+     "Call when there's nothing else to do"
+     {:type "object",
+      :properties {:message
+                     {:type "string",
+                      :description
+                        "A message to send when ending the conversation."}},
+      :required ["message"]}
+     (fn [& _] EndOfConversation))
    (->FunctionDeclaration "git-ls-files"
                           "Lists files in a git repository."
                           nil
@@ -165,4 +172,4 @@
               the capital of France?"}]}),
               :throw-exceptions false}))))
 
-(defn -main [xs] ((comp dorun map) println (run-prompt xs)))
+(defn -main [xs] ((comp dorun map) pprint/pprint (run-prompt xs)))
