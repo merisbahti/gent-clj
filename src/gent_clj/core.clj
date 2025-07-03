@@ -10,7 +10,6 @@
                  :messages [{:role "user",
                              :content "What is the capital of France?"}]})
 
-
 (def api-base (System/getenv "OPENAI_API_BASE"))
 (def api-key (System/getenv "OPENAI_API_KEY"))
 (defn git-ls-files
@@ -21,11 +20,8 @@
 (comment
   (git-ls-files))
 
-
 (defrecord FunctionDeclaration [name description parameters definition])
 (deftype EndOfConversation [])
-
-
 
 (def function-declarations
   [(->FunctionDeclaration "end"
@@ -96,10 +92,8 @@
 
 
 (defn should-end?
-  [parts]
-  (-> parts
-      (get :parts)
-      (#(some (fn [part] (= "end" (get-in part [:functionCall :name]))) %))))
+  [{parts :parts}]
+  (some (comp (partial = "end") :name :functionCall) parts))
 (deftest should-end-test
   (testing "should end"
     (is (= true
