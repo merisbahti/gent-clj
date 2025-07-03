@@ -57,11 +57,15 @@
 
 (def ApiResponse [:map ["candidates" [:sequential [:map ["content" [:map]]]]]])
 
+(def modelnames {:gemini-2.5-flash-lite "gemini-2.5-flash-lite-preview-06-17"})
+
 (defn call-api
   [contents]
   (->
     (client/post
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent"
+      (format
+        "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
+        (:gemini-2.5-flash-lite modelnames))
       {:headers {"x-goog-api-key" (System/getenv "GEMINI_API_KEY"),
                  "Content-Type" "application/json"},
        :throw-exceptions false,
@@ -75,6 +79,9 @@
     (#(m/assert ApiResponse %))
     (get-in ["candidates" 0 "content"])
     (walk/keywordize-keys)))
+
+(comment
+  (run-prompt "list the files"))
 
 (let [{{name :name, args :args} :functionCall}
         {:functionCall {:name "myname", :args {:arg "myarg"}}}]
@@ -123,8 +130,7 @@
           (if (and (> iters-left 0) (not should-end))
             (recur (dec iters-left) new-contents)
             new-contents))))
-(comment
-  (run-prompt "list the files"))
+
 
 (comment
   (-> (client/get (str api-base "/models")
