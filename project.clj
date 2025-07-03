@@ -7,5 +7,6 @@
                  [clj-http "3.13.1"]
                  [org.clojure/data.json "2.5.1"]
                  [metosin/malli "0.19.1"]]
+  :main gent-clj.core
   :repl-options {:init-ns gent-clj.core}
   :test-paths ["test" "src"])

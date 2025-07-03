@@ -97,8 +97,8 @@
 (deftest should-end-test
   (testing "should end"
     (is (= true
-           (should-end? {:parts [{:functionCall {:name "end", :args {}}}],
-                         :role "model"}))))
+           (should-end? {:role "model",
+                         :parts [{:functionCall {:name "end", :args {}}}]}))))
   (testing "keep going?"
     (is (not (= true
                 (should-end? {:parts [{:functionCall {:name "stuff",
@@ -164,3 +164,5 @@
                          "What isp
               the capital of France?"}]}),
               :throw-exceptions false}))))
+
+(defn -main [xs] ((comp dorun map) println (run-prompt xs)))
