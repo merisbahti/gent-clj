@@ -7,19 +7,18 @@
             [clojure.test :refer [deftest is testing]]
             [clojure.walk :as walk]
             [malli.core :as m]))
-(json/write-str {:model "openai/gpt-4.1",
-                 :messages [{:role "user",
-                             :content "What is the capital of France?"}]})
 
 (def api-base (System/getenv "OPENAI_API_BASE"))
 (def api-key (System/getenv "OPENAI_API_KEY"))
+
 (defn git-ls-files
   []
   (-> (sh/sh "git" "ls-files")
       :out
       (str/split #"\n")))
-(comment
-  (git-ls-files))
+(deftest ls-files
+  (is (every? string? (git-ls-files)))
+  (is (some (partial = "README.md") (git-ls-files))))
 
 (defrecord FunctionDeclaration [name description parameters definition])
 (deftype EndOfConversation [])
@@ -53,7 +52,6 @@
               (catch Exception _ {:error (str "Error reading file: " path)}))
          {:error (str "File not in git path: " path)})))])
 
-(def roles {:user "user", :model "model"})
 
 (def ApiResponse [:map ["candidates" [:sequential [:map ["content" [:map]]]]]])
 
@@ -81,15 +79,12 @@
     (walk/keywordize-keys)))
 
 (comment
-  (run-prompt "list the files"))
-
-(let [{{name :name, args :args} :functionCall}
-        {:functionCall {:name "myname", :args {:arg "myarg"}}}]
-  [name args])
+  (run-prompt "list the names of the files this repo"))
 
 (defn handle-gemini-response
   [response]
   (map (fn [{{function-name :name, function-args :args} :functionCall}]
+         (println function-name)
          (let* [found-fn
                 (:definition (first (filter #(= function-name (:name %))
                                       function-declarations)))]
@@ -101,9 +96,17 @@
                                                  {:error
                                                     (str "Function not found: "
                                                          function-name)})}}}]}))
-    (get response :parts)))
+    (:parts response)))
 
-
+(deftest handle-gemini-response-test
+  (is (= (handle-gemini-response {:parts []}) []))
+  (is (= (handle-gemini-response {:parts [{:functionCall {:name "end",
+                                                          :args ""}}]})
+         (list {:parts [{:functionResponse
+                           {:name "end",
+                            :response {:result
+                                         gent_clj.core.EndOfConversation}}}],
+                :role "user"}))))
 
 (defn should-end?
   [{parts :parts}]
