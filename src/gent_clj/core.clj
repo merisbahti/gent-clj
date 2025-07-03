@@ -164,6 +164,3 @@
                          "What isp
               the capital of France?"}]}),
               :throw-exceptions false}))))
-(defn foo "I don't do a whole lot." [x] x)
-
-(deftest another-test (testing "FIXME2, I fail." (is (= "hi" (foo "hi")))))
