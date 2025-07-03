@@ -14,8 +14,8 @@
 (defn git-ls-files
   []
   (-> (sh/sh "git" "ls-files")
-      :out
-      (str/split #"\n")))
+    :out
+    (str/split #"\n")))
 (deftest ls-files
   (is (every? string? (git-ls-files)))
   (is (some (partial = "README.md") (git-ls-files))))
@@ -29,29 +29,28 @@
      "Call when there's nothing else to do"
      {:type "object",
       :properties {:message
-                     {:type "string",
-                      :description
-                        "A message to send when ending the conversation."}},
+                   {:type "string",
+                    :description
+                    "A message to send when ending the conversation."}},
       :required ["message"]}
      (fn [& _] EndOfConversation))
    (->FunctionDeclaration "git-ls-files"
-                          "Lists files in a git repository."
-                          nil
-                          (fn [& _] (git-ls-files)))
+     "Lists files in a git repository."
+     nil
+     (fn [& _] (git-ls-files)))
    (->FunctionDeclaration
      "open-file"
      "Show contents of a file in the git repository."
      {:type "object",
       :properties {:path {:type "string",
                           :description
-                            "The path to the file in the repository."}},
+                          "The path to the file in the repository."}},
       :required ["path"]}
      (fn [{path :path}]
        (if (some (partial = path) (git-ls-files))
          (try {:content (slurp path)}
-              (catch Exception _ {:error (str "Error reading file: " path)}))
+           (catch Exception _ {:error (str "Error reading file: " path)}))
          {:error (str "File not in git path: " path)})))])
-
 
 (def ApiResponse [:map ["candidates" [:sequential [:map ["content" [:map]]]]]])
 
@@ -88,25 +87,26 @@
          (let* [found-fn
                 (:definition (first (filter #(= function-name (:name %))
                                       function-declarations)))]
-               {:role "user",
-                :parts [{:functionResponse
-                           {:name (or function-name "not-found"),
-                            :response {:result (if found-fn
-                                                 (found-fn function-args)
-                                                 {:error
-                                                    (str "Function not found: "
-                                                         function-name)})}}}]}))
+           {:role "user",
+            :parts [{:functionResponse
+                     {:name (or function-name "not-found"),
+                      :response {:result (if found-fn
+                                           (found-fn function-args)
+                                           {:error
+                                            (str "Function not found: "
+                                              function-name)})}}}]}))
     (:parts response)))
 
 (deftest handle-gemini-response-test
   (is (= (handle-gemini-response {:parts []}) []))
   (is (= (handle-gemini-response {:parts [{:functionCall {:name "end",
                                                           :args ""}}]})
-         (list {:parts [{:functionResponse
-                           {:name "end",
-                            :response {:result
-                                         gent_clj.core.EndOfConversation}}}],
-                :role "user"}))))
+
+        (list {:parts [{:functionResponse
+                        {:name "end",
+                         :response {:result
+                                    gent_clj.core.EndOfConversation}}}],
+               :role "user"}))))
 
 (defn should-end?
   [{parts :parts}]
@@ -114,37 +114,37 @@
 (deftest should-end-test
   (testing "should end"
     (is (= true
-           (should-end? {:role "model",
-                         :parts [{:functionCall {:name "end", :args {}}}]}))))
+          (should-end? {:role "model",
+                        :parts [{:functionCall {:name "end", :args {}}}]}))))
   (testing "keep going?"
     (is (not (= true
-                (should-end? {:parts [{:functionCall {:name "stuff",
-                                                      :args {}}}],
-                              :role "model"}))))))
-
+               (should-end? {:parts [{:functionCall {:name "stuff",
+                                                     :args {}}}],
+                             :role "model"}))))))
 (defn run-prompt
   [prompt]
   (loop [iters-left 5
          contents [{:role "user", :parts [{:text prompt}]}]]
-    (let* [gemini-response (call-api contents) handled-gemini-response
-           (handle-gemini-response gemini-response) should-end
-           (should-end? gemini-response) new-contents
-           (concat contents [gemini-response] handled-gemini-response)]
-          (if (and (> iters-left 0) (not should-end))
-            (recur (dec iters-left) new-contents)
-            new-contents))))
-
+    (let*
+      [gemini-response         (call-api contents)
+       handled-gemini-response (handle-gemini-response gemini-response)
+       should-end              (should-end? gemini-response)
+       new-contents            (concat contents [gemini-response] handled-gemini-response)]
+      (if (and (> iters-left 0) (not should-end))
+        (recur (dec iters-left) new-contents)
+        new-contents))))
 
 (comment
+
   (-> (client/get (str api-base "/models")
-                  {:headers {"Authorization" (str "Bearer " api-key),
-                             "Accept" "application/json",
-                             "Content-Type" "application/json"},
-                   :throw-exceptions false})
-      :body
-      json/read-str
-      walk/keywordize-keys
-      :data))
+        {:headers {"Authorization" (str "Bearer " api-key),
+                   "Accept" "application/json",
+                   "Content-Type" "application/json"},
+         :throw-exceptions false})
+    :body
+    json/read-str
+    walk/keywordize-keys
+    :data))
       ;; #(map (fn [x] (get-in x ["capabilities" "family"]) %1))
 (comment
   (json/read-str
@@ -154,13 +154,13 @@
                         "Accept" "application/json",
                         "Content-Type" "application/json"},
               :body
-                (json/write-str
-                  {:model "gpt-3.5-turbo",
-                   :tools [],
-                   :messages
-                     [{:role "user",
-                       :content
-                         "What isp
+              (json/write-str
+                {:model "gpt-3.5-turbo",
+                 :tools [],
+                 :messages
+                 [{:role "user",
+                   :content
+                   "What isp
               the capital of France?"}]}),
               :throw-exceptions false}))))
 
@@ -172,12 +172,12 @@
                         "Accept" "application/json",
                         "Content-Type" "application/json"},
               :body
-                (json/write-str
-                  {:model "gpt-3.5-turbo",
-                   :messages
-                     [{:role "user",
-                       :content
-                         "What isp
+              (json/write-str
+                {:model "gpt-3.5-turbo",
+                 :messages
+                 [{:role "user",
+                   :content
+                   "What isp
               the capital of France?"}]}),
               :throw-exceptions false}))))
 
